@@ -1,0 +1,4 @@
+# This file is to declare file names that won't get pushed into github repo
+.env
+node_modules/
+build/
