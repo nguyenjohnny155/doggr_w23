@@ -61,6 +61,7 @@
                 browsers are not up to date, so they struggle with javascript functions
 */
 
+/*
 let databaseReady = () => {
     // Javascript can also be written with just a resolve, implying that this promise will never fail
     return new Promise( (resolve,reject) => { 
@@ -78,7 +79,7 @@ async function checkDatabase(){
 }
 
 checkDatabase();
-
+*/
 /*
 // PROMISE USE CASE EXAMPLE
 const getCatFactURL = "https://catfact.ninja/fact";
