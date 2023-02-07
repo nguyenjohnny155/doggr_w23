@@ -28,7 +28,6 @@ export function response(httpModuleRes){
         httpModuleRes.setHeader("Content-Type", url);
         httpModuleRes.status(301);
         httpModuleRes.end();
-
         return httpModuleRes;
     }
 }

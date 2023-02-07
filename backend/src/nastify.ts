@@ -15,28 +15,34 @@
 import http from "http";
 import fs from "fs/promises";
 import path from "path";
-import {request} from "./request"
-import {response} from "./response"
+import { request } from "./request"
+import { response } from "./response"
+import { checkMiddlewareInputs, matchPath } from "./lib/helpers";
+import { Router } from "./router/router";
 
 // export declaration allows us to reference this function from outside files.
 export function Nastify(){
+
+    // Whenever a user sends an HTTP request, we must know all of the middleware which applies to that request. 
+    // All of the middleware that applies to an HTTP request will get stacked onto this array, so the handler will know
+    // which middleware to run.
+    // Middleware also behaves similarly to vectors in C++.
+    const middlewares = [];
+    const router = new Router();
+
     async function listen(port=8080, cb){
-        return http.createServer(async (req, res) => {
+        return http
+            .createServer(async (req, res) => {
 
-            request(req);
-            response(res);
-            
-            const indexFile = await fs.readFile(path.resolve(__dirname, 'public', 'index.html'))
-                .catch(err => {
-                    console.error(err);
-                    res.setHeader('Content-Type', 'text/html');
-                    res.writeHead(500);
-                    return res.end(err);
-                })
+            request(req); // request url is parsed, and allocate an object w. NodeJS functions that returns our desired object
+                            // in JS, even when an object is allocated, more elements can be added to it.
 
-            res.setHeader('Content-Type', 'text/html');
-            res.writeHead(200);
-            return res.end(indexFile);
+            response(res); // our express response object doesn't have all the elements we need,
+                            // so we will pass res object into our own response function to add the elements
+                            // we need.
+
+            handleMiddleware(req, res, () => router.handle(req, res)); // handle iterating through middlewares array and execute all middleware functions
+
         }).listen({port}, () => {
             if (cb) {
                 if (typeof cb === 'function') {
@@ -46,6 +52,119 @@ export function Nastify(){
             }
         });
     }
+
+    function handleMiddleware(req, res, cb){
+        //handle middlewares here
+        req.handler = cb;
+        const next = findNext(req, res);
+        next(); // this is the same as findNext(req, res)(); the reason being is because we're not beinding the function to any variable. 
+        //findNext(req, res)(); // this is the same as next(); this notation allows us to execute a function without binding it to a variable.
+    }
+
+    // Points to the next middleware via recursion. 
+    /*
+        app.use("/admin", () => ValidateInputs());
+        app.use("/admin", () => DBSanitize());
+        middlewares => [ValidateInputs, DBSanitize]
+        this.middlewares[0] => ValidateInputs;
+    */
+    function findNext(req, res){
+        let current = -1;
+
+        const next = () => {
+            current += 1; 
+            const middleware = middlewares[current];
+
+            // Javascript does not tell us that we're out of an index bound, so we have to write the code below to check if a pointer is out of bound
+            const { matched = false, params = {} } = middleware ? matchPath(middleware.path, req.pathname) : {};
+
+            if ( matched ) {
+                console.log("Middleware for path found");
+                req.params = params;
+                middleware.handler(req, res, next); // middleware index functions are executed here
+            } else if (current <= middlewares.length){
+                next();
+            } else {
+                // we're done w/ middleware execution
+                req.handler(req, res);
+            }
+        }
+
+        return next;
+    }
+
+
+    // ...args imply that I can pass any # of parameters in the use function
+    // use()
+    // use("hello")
+    // use("hello", 7, () => {console.log("hi")})
+    // javascript will not save me if i don't do typechecks
+    /*
+    function use(...args) {
+        // This function will add a middleware to some particular path
+
+        let path = "*";
+        let handler = null;
+        
+        // Validate the quantity of the arguments
+        if ( args.length === 2 ) [path, handler] = args;
+
+        // Validate if the handler is a type = function
+        if ( typeof handler !== 'function') throw new Error("Middleware has to be a function");
+
+        // Validate if the path is a type = string
+        if ( typeof path !== 'string') throw new Error("Path is not a string");
+
+        this.middlewares.push({
+            path,
+            handler
+        })
+
+    }
+    */
+
+    function use(...args){
+        const {path, handler} = checkMiddlewareInputs(args);
+
+        middlewares.push({
+            path, 
+            handler
+        });
+    }
+
+    function get(...args) {
+        const {path, handler} = checkMiddlewareInputs(args);
+        return router.get(path, handler);
+    }
+
+    function post(...args) {
+        const {path, handler} = checkMiddlewareInputs(args);
+        return router.post(path, handler);
+    }
+
+    // Implement put here
+    function put(...args) {
+        const {path, handler} = checkMiddlewareInputs(args);
+        return router.put(path, handler);
+    }
+
+    
+    // Implement delete here
+    function _delete(...args){
+        const {path, handler} = checkMiddlewareInputs(args);
+        return router.delete(path, handler);
+    }
+    
+
+    return {
+        listen,
+        use,
+        get,
+        post,
+        put,
+        _delete
+    }
+
 }
 
 /*
